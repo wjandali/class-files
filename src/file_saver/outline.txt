@@ -1,0 +1,69 @@
+From a root link we want the ability to generate a tree of links and traverse it, considering a node "done" when
+a specific function is applied to it. This suggests two parallel processes in the event that processing a node (fetching children)
+is not the function meant to be applied to it to consider it done. Let's say f1(node) is the process of parsing a node for updating
+the tree structure. Let f2(node) be the process of, say, downloading all image sources to a file, or manipulating the html of the file and saving it, or the like. Then f(node) is complete when f1(node) and f2(node) are complete.
+
+But f1 or f2 can be complete before the other is and the other can move on down the tree or queue and continue.
+
+
+Let f1 be the simple task of downloading all images from a given URL i.e. retrieving the html and downloading all attribute values of src for img elements.
+
+Let f2 be the task of parsing all links that have not been parsed before. To keep track of visited links, either a database or in-memory set
+needs to be maintained. Updating this list should be a priority because we might want multiple threads running down the list as an exercise. Maybe thread number can be a parameter.
+
+Let's run through an example where the task is to download the src attribute of img elements.
+
+Consider the following link set:
+
+
+
+
+                   Link 1
+                  /
+            Link 2 -- Link 4 -- Link 1
+           /
+     Link 1       Link 6 
+           \     /     \
+           Link 3       Link 7
+                 \
+                  Link 5
+                        \
+                         Link 4
+
+
+How do we parse this assuming each odd link has 2 images and each even link has 1
+
+
+update future-links to inclued Link 1
+
+(look into events.. on an update to future-links if a thread is idle it should get back to work on that)
+
+create thread
+  current-link = pop future-links (are these thread-local vars? current-link should be but future links should be updated for all threads)
+  append visited-links current-link 
+  html = fetch html current-link
+
+  create thread for updating future-links
+    parse html and find all links not within future-links or visited-links
+    add those to future-links
+    also create a directory with the link name or subset of the url
+    # future links = 2, 3
+  create thread for saving images
+    parse html and for each link create a dir in the current directory matching the link name if no such directory exists (which thread wins?)
+    # current directory has subs 2 and 3
+    save each image in the current dir
+    # current directory has subs 2 and 3 and images 1 2 3
+
+
+
+    // this doesn't seem good. there are some issues arising due to variables not being localized. this makes it so this runs as one thread it seems.
+
+
+
+
+
+
+# wrote something decided it won't work.. thinking bout fixing it but am gonna read some more.....
+
+
+
