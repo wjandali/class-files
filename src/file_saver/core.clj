@@ -1,6 +1,7 @@
 (ns file_save.core
   (:require [clojure.java.io :as io])
   (:import (java.net URL))
+  (:import (java.io File))
   (:import (java.io BufferedReader InputStreamReader)))
 
 
@@ -23,7 +24,6 @@
     (catch Exception e "")))
 
 
-
 (defn list-tags [r url]
   (re-seq r (url-to-html url)))
 
@@ -32,34 +32,6 @@
     (filter #(not (nil? %)) (map #(last (re-find r %)) list))))
 
 
-(defn chopped-addresses [list]
-  (filter #(not (nil? %)) (map #(last (re-find #"(http[^?]+)?" %)) list)))
-
-(defn get-pretty-links [url]
-  (set (chopped-addresses (get-attrs "href" (list-tags links-reg url)))))
-
-(get-pretty-links "http://www.cs.berkeley.edu/~jrs/61bf06/")
-
-(defn download-image-to-cd [link]
-  (let [site-url (url link)]
-    (with-open [in (io/input-stream site-url)
-              out (io/output-stream "src/test.jpg")]
-      (io/copy in out))))
-
-(download-image-to-cd "http://upload.wikimedia.org/wikipedia/commons/1/17/Tiger_in_Ranthambhore.jpg")
-
-(System/getProperty "user.dir")
-
-
-
-;; main: url
-;; if url is in db ignore it
-;; append url to to-visit (ordered array)
-;; initiate two threads
-;; thread 1: takes last element in to-visit and downloads all images into the current dir
-;; thread 2:
-
-;;;;;;;
 (def my-url "http://www.cs.berkeley.edu/~jrs/61bf06/")
 
 
@@ -83,23 +55,78 @@
 (defn get-pretty-sub-links [url]
   (set (sub-addresses (get-attrs "href" (list-tags links-reg url)) url)))
 
-(get-pretty-sub-links my-url)
-
 (defn link-tree [url, height]
   (if (= 0 height)
     (list url)
     (conj  (map #(link-tree % (dec height)) (get-pretty-sub-links url)) url)))
 
-(def tree (link-tree my-url 2))
+(def tree (link-tree my-url 3))
+
+tree
+
+(defn fromto [a,b, tree]
+  (take (- b a) (drop a tree)))
+
+(defn rel-path [base-url url]
+  (last (re-matches (re-pattern (str (complete-url base-url) "/([^?]+)") ) url)))
+
+
+
+(defn compound [a mark]
+  (loop [n 1 b [(first a)]]
+    (if (= n (count a))
+      b
+      (recur
+       (inc n)
+       (conj b (clojure.string/join (re-pattern mark) [(last b) (a n)]))))))
+
+
+(defn write-if-file-type [base-url link file-types]
+  (let [path (rel-path base-url link)
+        folder-array (compound (clojure.string/split path #"\/" ) "/")]
+    (if (and path (contains? file-types (last (re-matches #"[^?]+\.(\w{3,4})" path))) (not (.exists (File. path))))
+      (do
+        (doall (map #(.mkdir (File. %)) (butlast folder-array)))
+        (with-open [in (io/input-stream (url link))
+                    out (io/output-stream path)]
+          (io/copy in out))))))
+
+
+
+(write-if-file-type "http://www.cs.berkeley.edu/~jrs/61bf06/" "http://www.cs.berkeley.edu/~jrs/61bf06/hw/hw1/readme.pdf" #{"pdf"})
+(rel-path "http://www.cs.berkeley.edu/~jrs/61bf06/" "http://www.cs.berkeley.edu/~jrs/61bf06/hw/hw1/readme.pdf")
+(compound (clojure.string/split (rel-path "http://www.cs.berkeley.edu/~jrs/61bf06/" "http://www.cs.berkeley.edu/~jrs/61bf06/hw/hw1/readme.pdf") #"\/") "/")
+
+(defn write-or-create [tree base-url file-types]
+  (if (empty? (rest tree))
+    nil
+    (do
+      (map #(write-if-file-type base-url % file-types) (filter #(re-matches #"[^?]+\.(\w{3,4})" %) (direct-children tree)))
+      (map #(write-or-create % base-url file-types) (filter #(not (re-matches #"[^?]+\.(\w{3,4})" %)) (rest tree))))))
+
+
+
+(write-or-create tree (first tree) #{"pdf" "txt" "java"})
+
+(defn direct-children [tree]
+  (map #( first %) (rest tree)))
+
+(defn subtrees [tree]
+  (rest tree))
+
+tree
+
+(rest (rest tree))
+(direct-children tree)
 
 (first (rest tree))
 
-(first (rest tree))
+(last tree)
 
-(get-attrs "href" (list-tags links-reg my-url))
+(defn download-image-to-cd [link]
+  (let [site-url (url link)]
+    (with-open [in (io/input-stream site-url)
+              out (io/output-stream "src/test.jpg")]
+      (io/copy in out))))
 
-(defn sub-links-set [url, height]
-  (if (= height 0)
-    '(url)
-    (let [sub-links (get-sub-links url)]
-    (conj '(url) (map (fn [u] (sub-links-set u (dec height))) sub-links)))))  ;;should return a tree
+(defn link-tree-to-files [base-path, tree, file-types])
